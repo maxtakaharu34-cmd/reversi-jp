@@ -1,0 +1,948 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#065f46">
+<title>リバーシ</title>
+<style>
+  :root{
+    --felt:#065f46;
+    --felt-dark:#044a37;
+    --felt-line:#03402f;
+    --gold:#fbbf24;
+    --ink:#0b1d18;
+    --paper:#f4f7f5;
+    --black-a:#1c1c1c;
+    --black-b:#3a3a3a;
+    --white-a:#fdfdfd;
+    --white-b:#cfd6d2;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{
+    margin:0;padding:0;width:100%;height:100%;
+    overflow:hidden;
+    background:radial-gradient(120% 120% at 50% 0%,#0b7a5c 0%,var(--felt) 45%,var(--felt-dark) 100%);
+    color:var(--paper);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP","Yu Gothic UI",system-ui,sans-serif;
+    -webkit-user-select:none;user-select:none;
+    touch-action:manipulation;
+  }
+  #app{
+    position:fixed;inset:0;
+    height:100dvh;width:100vw;
+    display:flex;flex-direction:column;
+    align-items:center;
+    padding:calc(env(safe-area-inset-top) + 8px) 10px calc(env(safe-area-inset-bottom) + 8px);
+  }
+
+  /* ---- Top bar ---- */
+  header{
+    width:100%;max-width:560px;
+    display:flex;align-items:center;justify-content:space-between;
+    gap:8px;flex:0 0 auto;
+  }
+  .brand{
+    font-weight:800;font-size:clamp(18px,5.5vw,24px);
+    letter-spacing:.04em;
+    display:flex;align-items:center;gap:6px;
+    text-shadow:0 1px 0 rgba(0,0,0,.35);
+  }
+  .brand .dot{color:var(--gold);}
+  .top-btns{display:flex;gap:8px;}
+  .icon-btn{
+    appearance:none;border:none;cursor:pointer;
+    width:40px;height:40px;border-radius:12px;
+    background:rgba(255,255,255,.12);
+    color:var(--paper);font-size:18px;
+    display:flex;align-items:center;justify-content:center;
+    transition:transform .12s ease,background .2s ease;
+    backdrop-filter:blur(4px);
+  }
+  .icon-btn:active{transform:scale(.9);background:rgba(255,255,255,.22);}
+
+  /* ---- Scoreboard ---- */
+  .score{
+    width:100%;max-width:560px;flex:0 0 auto;
+    display:flex;align-items:center;justify-content:center;gap:10px;
+    margin:8px 0 6px;
+  }
+  .score-side{
+    display:flex;align-items:center;gap:8px;
+    background:rgba(0,0,0,.18);
+    border-radius:999px;padding:6px 12px 6px 6px;
+    min-width:96px;justify-content:center;
+    transition:box-shadow .25s ease,transform .25s ease;
+  }
+  .score-side.active{
+    box-shadow:0 0 0 2px var(--gold),0 4px 14px rgba(0,0,0,.3);
+    transform:translateY(-1px);
+  }
+  .mini{
+    width:26px;height:26px;border-radius:50%;flex:0 0 auto;
+    box-shadow:inset 0 -2px 3px rgba(0,0,0,.35),0 1px 2px rgba(0,0,0,.4);
+  }
+  .mini.black{background:radial-gradient(circle at 35% 30%,var(--black-b),var(--black-a));}
+  .mini.white{background:radial-gradient(circle at 35% 30%,var(--white-a),var(--white-b));}
+  .score-num{font-weight:800;font-size:22px;min-width:26px;text-align:center;font-variant-numeric:tabular-nums;}
+  .score-label{font-size:11px;opacity:.8;font-weight:600;}
+  .vs{font-weight:700;opacity:.6;font-size:14px;}
+
+  .turn-info{
+    width:100%;max-width:560px;flex:0 0 auto;text-align:center;
+    height:22px;margin-bottom:4px;
+    font-size:13px;font-weight:600;letter-spacing:.02em;
+  }
+  .turn-info .thinking::after{
+    content:"";animation:dots 1.2s steps(4,end) infinite;
+  }
+  @keyframes dots{0%{content:"";}25%{content:"・";}50%{content:"・・";}75%{content:"・・・";}100%{content:"";}}
+
+  /* ---- Board ---- */
+  .board-wrap{
+    flex:1 1 auto;display:flex;align-items:center;justify-content:center;
+    width:100%;min-height:0;
+  }
+  #board{
+    width:min(94vw,70vh);height:min(94vw,70vh);
+    max-width:560px;max-height:560px;
+    display:grid;
+    grid-template-columns:repeat(8,1fr);
+    grid-template-rows:repeat(8,1fr);
+    gap:2px;
+    padding:8px;
+    background:
+      linear-gradient(145deg,#0a6e52,#055038);
+    border-radius:14px;
+    box-shadow:
+      0 10px 30px rgba(0,0,0,.45),
+      0 2px 0 rgba(255,255,255,.08) inset,
+      0 -4px 16px rgba(0,0,0,.35) inset;
+    border:3px solid rgba(0,0,0,.25);
+  }
+  .cell{
+    position:relative;
+    background:
+      radial-gradient(120% 120% at 30% 25%,rgba(255,255,255,.06),transparent 60%),
+      var(--felt);
+    border-radius:5px;
+    display:flex;align-items:center;justify-content:center;
+    cursor:default;
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.18);
+    overflow:hidden;
+  }
+  .cell.legal{cursor:pointer;}
+  .hint{
+    position:absolute;width:30%;height:30%;border-radius:50%;
+    background:rgba(251,191,36,.55);
+    box-shadow:0 0 8px rgba(251,191,36,.5);
+    animation:pulse 1.4s ease-in-out infinite;
+    pointer-events:none;
+  }
+  @keyframes pulse{0%,100%{transform:scale(.7);opacity:.45;}50%{transform:scale(1);opacity:.9;}}
+  .cell.legal:active .hint{transform:scale(1.15);opacity:1;}
+
+  /* ---- Disc ---- */
+  .disc{
+    width:82%;height:82%;border-radius:50%;
+    transform-style:preserve-3d;
+    transition:transform .42s cubic-bezier(.45,.05,.3,1);
+    box-shadow:0 3px 6px rgba(0,0,0,.4);
+  }
+  .disc .face{
+    position:absolute;inset:0;border-radius:50%;
+    backface-visibility:hidden;-webkit-backface-visibility:hidden;
+  }
+  .disc .front{
+    box-shadow:inset 0 -3px 5px rgba(0,0,0,.35),inset 0 2px 4px rgba(255,255,255,.25);
+  }
+  .disc .back{
+    transform:rotateY(180deg);
+    box-shadow:inset 0 -3px 5px rgba(0,0,0,.35),inset 0 2px 4px rgba(255,255,255,.25);
+  }
+  .face.black{background:radial-gradient(circle at 35% 30%,var(--black-b),var(--black-a));}
+  .face.white{background:radial-gradient(circle at 35% 30%,var(--white-a),var(--white-b));}
+
+  /* color = which face is currently up; we rotate the wrapper */
+  .disc.black{transform:rotateY(0deg);}
+  .disc.white{transform:rotateY(180deg);}
+
+  /* place pop-in */
+  .disc.place{animation:pop .34s cubic-bezier(.2,1.3,.5,1);}
+  @keyframes pop{0%{transform:scale(0) rotateY(var(--rot,0));}60%{transform:scale(1.12) rotateY(var(--rot,0));}100%{transform:scale(1) rotateY(var(--rot,0));}}
+
+  /* ---- Overlays ---- */
+  .overlay{
+    position:fixed;inset:0;z-index:20;
+    display:flex;align-items:center;justify-content:center;
+    padding:24px;
+    background:radial-gradient(120% 120% at 50% 10%,rgba(6,95,70,.82),rgba(4,40,30,.94));
+    backdrop-filter:blur(6px);
+    animation:fade .3s ease;
+  }
+  .overlay.hidden{display:none;}
+  @keyframes fade{from{opacity:0;}to{opacity:1;}}
+  .panel{
+    width:100%;max-width:360px;
+    background:linear-gradient(160deg,rgba(255,255,255,.1),rgba(255,255,255,.04));
+    border:1px solid rgba(255,255,255,.18);
+    border-radius:22px;
+    padding:26px 22px 24px;
+    text-align:center;
+    box-shadow:0 18px 50px rgba(0,0,0,.5);
+  }
+  .panel h1{margin:0 0 4px;font-size:30px;letter-spacing:.06em;font-weight:800;}
+  .panel h1 .dot{color:var(--gold);}
+  .panel .sub{margin:0 0 20px;font-size:13px;opacity:.85;}
+  .panel h2{margin:0 0 14px;font-size:26px;font-weight:800;}
+  .panel .result-score{
+    display:flex;align-items:center;justify-content:center;gap:14px;
+    margin:8px 0 18px;font-weight:800;font-size:22px;
+  }
+  .panel .result-score .mini{width:24px;height:24px;}
+
+  .level-q{font-size:14px;opacity:.85;margin-bottom:10px;font-weight:600;}
+  .levels{display:flex;flex-direction:column;gap:10px;margin-bottom:6px;}
+  .btn{
+    appearance:none;border:none;cursor:pointer;
+    width:100%;padding:14px 16px;border-radius:14px;
+    font-size:16px;font-weight:700;letter-spacing:.02em;
+    color:var(--ink);
+    background:linear-gradient(180deg,#ffffff,#e9efeb);
+    box-shadow:0 4px 0 rgba(0,0,0,.25),0 6px 14px rgba(0,0,0,.25);
+    transition:transform .1s ease,box-shadow .1s ease;
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+  }
+  .btn:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.25),0 3px 8px rgba(0,0,0,.25);}
+  .btn .lv-name{font-size:17px;}
+  .btn .lv-desc{font-size:11px;opacity:.65;font-weight:600;}
+  .btn.primary{
+    color:var(--ink);
+    background:linear-gradient(180deg,var(--gold),#e89c1c);
+    justify-content:center;font-size:18px;
+  }
+  .btn.ghost{
+    color:var(--paper);
+    background:rgba(255,255,255,.1);
+    box-shadow:none;border:1px solid rgba(255,255,255,.2);
+    justify-content:center;font-size:14px;padding:11px;
+  }
+  .stat{
+    margin-top:16px;font-size:12px;opacity:.8;
+    display:flex;justify-content:center;gap:16px;flex-wrap:wrap;
+  }
+  .stat b{color:var(--gold);}
+  .badge{
+    display:inline-block;margin-bottom:14px;font-size:42px;line-height:1;
+    animation:bob 2s ease-in-out infinite;
+  }
+  @keyframes bob{0%,100%{transform:translateY(0) rotate(-3deg);}50%{transform:translateY(-6px) rotate(3deg);}}
+  .pass-toast{
+    position:fixed;left:50%;top:38%;
+    transform:translateX(-50%);
+    z-index:15;
+    background:rgba(0,0,0,.7);color:#fff;
+    padding:12px 22px;border-radius:999px;font-weight:700;font-size:16px;
+    box-shadow:0 8px 24px rgba(0,0,0,.4);
+    opacity:0;pointer-events:none;transition:opacity .25s ease;
+  }
+  .pass-toast.show{opacity:1;animation:toastPop .3s ease;}
+  @keyframes toastPop{0%{transform:translateX(-50%) scale(.8);}100%{transform:translateX(-50%) scale(1);}}
+</style>
+
+<style>/* spark-ux-v1 */input:not([type=button]):not([type=submit]):not([readonly]),textarea,select{font-size:16px}html{-webkit-text-size-adjust:100%}body{overscroll-behavior:none}button{touch-action:manipulation}</style>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="リバーシ">
+<!-- spark-pwa-v1 -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="リバーシ">
+<meta property="og:description" content="CPU対戦オセロ。3段階の強さで頭脳バトル">
+<meta property="og:url" content="https://maxtakaharu34-cmd.github.io/reversi-jp">
+<meta property="og:image" content="https://maxtakaharu34-cmd.github.io/reversi-jp/icon.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="リバーシ">
+<meta name="twitter:description" content="CPU対戦オセロ。3段階の強さで頭脳バトル">
+<meta name="twitter:image" content="https://maxtakaharu34-cmd.github.io/reversi-jp/icon.svg">
+<!-- spark-og-v1 -->
+<style>/* spark-ux-v2 */*{-webkit-touch-callout:none}html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}input,select,textarea{-webkit-appearance:none;appearance:none}button{cursor:pointer}button:disabled{cursor:not-allowed}a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:2px solid #5fc4ff;outline-offset:2px}@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important;scroll-behavior:auto !important}}</style>
+<script>/* spark-ux-v2 haptic */(function(){if(!navigator.vibrate)return;var last=0;document.addEventListener("click",function(e){var now=Date.now();if(now-last<50)return;var t=e.target&&e.target.closest&&e.target.closest("button,a[role=button],[data-haptic]");if(!t||t.disabled)return;last=now;try{navigator.vibrate(8)}catch(_){}},{passive:true});})();</script>
+<style>/* spark-ux-v3 */#sx-loading{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:11000;display:none;align-items:center;justify-content:center;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}#sx-loading.show{display:flex}#sx-loading .sp{width:50px;height:50px;border:5px solid rgba(255,255,255,.2);border-top-color:#5fc4ff;border-radius:50%;animation:sx-spin .8s linear infinite}@keyframes sx-spin{to{transform:rotate(360deg)}}.sx-toast{position:fixed;bottom:80px;left:50%;transform:translate(-50%,30px);background:#222;color:#fff;padding:10px 18px;border-radius:999px;font-size:13px;z-index:11500;opacity:0;transition:opacity .3s,transform .3s;max-width:90%;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.4);font-family:system-ui,-apple-system,sans-serif;pointer-events:none}.sx-toast.show{opacity:1;transform:translate(-50%,0)}.sx-toast-success{background:#10b981}.sx-toast-error{background:#ef4444}.sx-toast-warn{background:#f59e0b}.sx-pwa-banner{position:fixed;top:max(8px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);background:rgba(20,20,30,.95);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:14px;padding:10px 12px;display:flex;align-items:center;gap:10px;z-index:9998;max-width:92%;width:340px;box-shadow:0 8px 24px rgba(0,0,0,.5);font-size:13px;font-family:system-ui,-apple-system,sans-serif;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);animation:sx-pwa-in .35s ease-out}@keyframes sx-pwa-in{from{opacity:0;transform:translate(-50%,-12px)}to{opacity:1;transform:translateX(-50%)}}.sx-pwa-banner .ico{font-size:22px;flex-shrink:0}.sx-pwa-banner .body{flex:1;line-height:1.3;min-width:0}.sx-pwa-banner .body b{display:block;font-size:12px;font-weight:700;margin-bottom:1px}.sx-pwa-banner .body span{font-size:10px;opacity:.7;display:block}.sx-pwa-banner button{flex-shrink:0;background:#5fc4ff;color:#000;border:0;padding:7px 12px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit}.sx-pwa-banner button.x{background:transparent;color:#aaa;font-size:18px;padding:0;width:26px;height:26px;line-height:1}.sx-alert{padding:10px 14px;border-radius:10px;font-size:13px;line-height:1.5;border:1.5px solid;font-family:system-ui,sans-serif}.sx-alert-error{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.4);color:#fff}.sx-alert-warn{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.4);color:#fff}.sx-alert-info{background:rgba(95,196,255,.12);border-color:rgba(95,196,255,.4);color:#fff}</style>
+<script>/* spark-ux-v3 */(function(){if(window.SX)return;function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}var SX={};window.SX=SX;var lEl=null,lN=0;SX.loading=function(on){if(on){lN++;if(!lEl){lEl=el("div");lEl.id="sx-loading";lEl.appendChild(el("div","sp"));document.body.appendChild(lEl)}lEl.classList.add("show")}else{lN=Math.max(0,lN-1);if(lN===0&&lEl)lEl.classList.remove("show")}};SX.toast=function(msg,opts){opts=opts||{};var t=el("div","sx-toast sx-toast-"+(opts.type||"info"),msg);document.body.appendChild(t);requestAnimationFrame(function(){t.classList.add("show")});setTimeout(function(){t.classList.remove("show");setTimeout(function(){if(t.parentNode)t.parentNode.removeChild(t)},300)},opts.duration||2200)};SX.success=function(m){SX.toast(m,{type:"success"})};SX.error=function(m,o){SX.toast(m,Object.assign({type:"error",duration:3500},o||{}))};SX.warn=function(m){SX.toast(m,{type:"warn"})};SX.alert=function(msg,kind){var d=el("div","sx-alert sx-alert-"+(kind||"info"),msg);return d};function pwa(){try{if(matchMedia("(display-mode: standalone)").matches)return;if(navigator.standalone)return;var key="sx-pwa-dismissed";var d=0;try{d=parseInt(localStorage.getItem(key)||"0",10)}catch(_){}if(Date.now()-d<7*86400000)return;var deferred=null,banner=null;window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();deferred=e;show("android")});var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent);if(isIOS&&!navigator.standalone){setTimeout(function(){show("ios")},6000)}function show(platform){if(banner)return;banner=el("div","sx-pwa-banner");banner.appendChild(el("div","ico","📱"));var b=el("div","body");b.appendChild(el("b","",platform==="ios"?"ホームに追加で再アクセス簡単！":"アプリとしてインストールできます"));b.appendChild(el("span","",platform==="ios"?"共有 → ホーム画面に追加":"タップでインストール"));banner.appendChild(b);var add=el("button","","追加");add.addEventListener("click",function(){if(deferred){deferred.prompt();deferred.userChoice.finally(function(){dismiss()})}else{SX.toast(platform==="ios"?"共有 → 「ホーム画面に追加」":"対応ブラウザでお試しを",{duration:4000});dismiss()}});var x=el("button","x","✕");x.addEventListener("click",dismiss);banner.appendChild(add);banner.appendChild(x);document.body.appendChild(banner);}function dismiss(){if(banner&&banner.parentNode)banner.parentNode.removeChild(banner);banner=null;try{localStorage.setItem(key,String(Date.now()))}catch(_){}}}catch(_){}}if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",pwa);else pwa();})();</script>
+<script>/* spark-track-v1 */(function(){if(window.SX_TRACKED)return;window.SX_TRACKED=true;var SU="https://qheeiwmzkhovlfdruomk.supabase.co",SK="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFoZWVpd216a2hvdmxmZHJ1b21rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2NzkyMTEsImV4cCI6MjA5MjI1NTIxMX0.eVKps24w6oydFOIQINhcuAXWlp29fXqylWOX8MxMRe0";var slug="reversi-jp";var sid="";try{sid=sessionStorage.getItem("sx_sid");if(!sid){sid=Math.random().toString(36).slice(2,10);sessionStorage.setItem("sx_sid",sid)}}catch(_){sid=Math.random().toString(36).slice(2,10)}var utm="";try{var p=new URLSearchParams(location.search);utm=p.get("utm_source")||p.get("ref")||""}catch(_){}var body={app_slug:slug,ref:(document.referrer||"").slice(0,200)||null,utm:utm.slice(0,50)||null,ua_mobile:/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent),session_id:sid};try{fetch(SU+"/rest/v1/pageviews",{method:"POST",headers:{"apikey":SK,"Authorization":"Bearer "+SK,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify(body),keepalive:true}).catch(function(){})}catch(_){}})();</script>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">リバーシ<span class="dot">●</span></div>
+    <div class="top-btns">
+      <button class="icon-btn" id="muteBtn" aria-label="ミュート切替">🔊</button>
+      <button class="icon-btn" id="menuBtn" aria-label="メニュー">≡</button>
+    </div>
+  </header>
+
+  <div class="score">
+    <div class="score-side" id="sideBlack">
+      <span class="mini black"></span>
+      <span class="score-num" id="numBlack">2</span>
+      <span class="score-label">あなた</span>
+    </div>
+    <span class="vs">VS</span>
+    <div class="score-side" id="sideWhite">
+      <span class="score-label">CPU</span>
+      <span class="score-num" id="numWhite">2</span>
+      <span class="mini white"></span>
+    </div>
+  </div>
+
+  <div class="turn-info" id="turnInfo"></div>
+
+  <div class="board-wrap">
+    <div id="board" aria-label="リバーシ盤"></div>
+  </div>
+</div>
+
+<div class="pass-toast" id="passToast"></div>
+
+<!-- Start overlay -->
+<div class="overlay" id="startOverlay">
+  <div class="panel">
+    <h1>リバーシ<span class="dot">●</span></h1>
+    <p class="sub">あなたは黒（先手）・CPUは白</p>
+    <div class="level-q">CPUの強さを選んでね</div>
+    <div class="levels">
+      <button class="btn" data-level="easy">
+        <span class="lv-name">よわい</span>
+        <span class="lv-desc">ランダムに打つ</span>
+      </button>
+      <button class="btn" data-level="normal">
+        <span class="lv-name">ふつう</span>
+        <span class="lv-desc">いちばん多く取る手</span>
+      </button>
+      <button class="btn" data-level="hard">
+        <span class="lv-name">つよい</span>
+        <span class="lv-desc">角を狙い先読み</span>
+      </button>
+    </div>
+    <div class="stat" id="startStat"></div>
+  </div>
+</div>
+
+<!-- End overlay -->
+<div class="overlay hidden" id="endOverlay">
+  <div class="panel">
+    <div class="badge" id="endBadge">🏆</div>
+    <h2 id="endTitle">勝ち！</h2>
+    <div class="result-score">
+      <span class="mini black"></span><span id="endBlack">0</span>
+      <span class="vs">-</span>
+      <span id="endWhite">0</span><span class="mini white"></span>
+    </div>
+    <button class="btn primary" id="againBtn">もう一度あそぶ</button>
+    <button class="btn ghost" id="changeBtn">強さを変える</button>
+    <div class="stat" id="endStat"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const SIZE = 8;
+  const EMPTY = 0, BLACK = 1, WHITE = 2;
+  const HUMAN = BLACK, CPU = WHITE;
+  const DIRS = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+  const LS_PREFIX = "reversi-jp";
+
+  // Position weights for "hard" AI
+  const WEIGHTS = [
+    [120,-20, 20,  5,  5, 20,-20,120],
+    [-20,-40, -5, -5, -5, -5,-40,-20],
+    [ 20, -5, 15,  3,  3, 15, -5, 20],
+    [  5, -5,  3,  3,  3,  3, -5,  5],
+    [  5, -5,  3,  3,  3,  3, -5,  5],
+    [ 20, -5, 15,  3,  3, 15, -5, 20],
+    [-20,-40, -5, -5, -5, -5,-40,-20],
+    [120,-20, 20,  5,  5, 20,-20,120]
+  ];
+
+  // ---- State ----
+  let board = [];
+  let current = BLACK;
+  let level = "normal";
+  let busy = false;        // true while animating / CPU thinking
+  let gameOver = false;
+  let muted = false;
+
+  // ---- DOM ----
+  const boardEl = document.getElementById("board");
+  const numBlackEl = document.getElementById("numBlack");
+  const numWhiteEl = document.getElementById("numWhite");
+  const sideBlackEl = document.getElementById("sideBlack");
+  const sideWhiteEl = document.getElementById("sideWhite");
+  const turnInfoEl = document.getElementById("turnInfo");
+  const startOverlay = document.getElementById("startOverlay");
+  const endOverlay = document.getElementById("endOverlay");
+  const endTitle = document.getElementById("endTitle");
+  const endBadge = document.getElementById("endBadge");
+  const endBlack = document.getElementById("endBlack");
+  const endWhite = document.getElementById("endWhite");
+  const startStat = document.getElementById("startStat");
+  const endStat = document.getElementById("endStat");
+  const passToast = document.getElementById("passToast");
+  const muteBtn = document.getElementById("muteBtn");
+
+  // cell elements grid
+  const cells = [];
+
+  // ---- Audio ----
+  let audioCtx = null;
+  function ensureAudio(){
+    if(muted) return;
+    if(!audioCtx){
+      try{
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if(AC) audioCtx = new AC();
+      }catch(e){ audioCtx = null; }
+    }
+    if(audioCtx && audioCtx.state === "suspended"){ audioCtx.resume(); }
+  }
+  function beep(freq, dur, type, vol){
+    if(muted || !audioCtx) return;
+    try{
+      const t = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = type || "sine";
+      osc.frequency.setValueAtTime(freq, t);
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(vol || 0.12, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + (dur || 0.12));
+      osc.connect(g); g.connect(audioCtx.destination);
+      osc.start(t); osc.stop(t + (dur || 0.12) + 0.02);
+    }catch(e){}
+  }
+  function sndPlace(){ beep(440, 0.10, "triangle", 0.14); }
+  function sndFlip(i){ beep(520 + i*40, 0.07, "sine", 0.08); }
+  function sndWin(){ [523,659,784,1046].forEach((f,i)=>setTimeout(()=>beep(f,0.18,"triangle",0.14), i*120)); }
+  function sndLose(){ [392,330,262].forEach((f,i)=>setTimeout(()=>beep(f,0.22,"sine",0.13), i*140)); }
+  function sndDraw(){ [440,440].forEach((f,i)=>setTimeout(()=>beep(f,0.16,"square",0.10), i*160)); }
+  function sndPass(){ beep(300, 0.12, "sine", 0.10); }
+
+  // ---- localStorage ----
+  function loadStat(){
+    let wins = 0, plays = 0;
+    try{
+      wins = parseInt(localStorage.getItem(LS_PREFIX + ":wins") || "0", 10) || 0;
+      plays = parseInt(localStorage.getItem(LS_PREFIX + ":plays") || "0", 10) || 0;
+    }catch(e){}
+    return { wins, plays };
+  }
+  function saveStat(wins, plays){
+    try{
+      localStorage.setItem(LS_PREFIX + ":wins", String(wins));
+      localStorage.setItem(LS_PREFIX + ":plays", String(plays));
+    }catch(e){}
+  }
+  function loadMute(){
+    try{ return localStorage.getItem(LS_PREFIX + ":muted") === "1"; }catch(e){ return false; }
+  }
+  function saveMute(v){
+    try{ localStorage.setItem(LS_PREFIX + ":muted", v ? "1" : "0"); }catch(e){}
+  }
+
+  // ---- Board logic ----
+  function newBoard(){
+    const b = [];
+    for(let r=0;r<SIZE;r++){ b.push(new Array(SIZE).fill(EMPTY)); }
+    b[3][3] = WHITE; b[3][4] = BLACK;
+    b[4][3] = BLACK; b[4][4] = WHITE;
+    return b;
+  }
+  function inside(r,c){ return r>=0 && r<SIZE && c>=0 && c<SIZE; }
+  function opponent(p){ return p === BLACK ? WHITE : BLACK; }
+
+  // returns array of [r,c] flipped if playing color at r,c; empty if illegal
+  function flipsFor(b, r, c, color){
+    if(b[r][c] !== EMPTY) return [];
+    const opp = opponent(color);
+    const flips = [];
+    for(const [dr,dc] of DIRS){
+      let rr = r+dr, cc = c+dc;
+      const line = [];
+      while(inside(rr,cc) && b[rr][cc] === opp){
+        line.push([rr,cc]); rr += dr; cc += dc;
+      }
+      if(line.length && inside(rr,cc) && b[rr][cc] === color){
+        for(const p of line) flips.push(p);
+      }
+    }
+    return flips;
+  }
+  function legalMoves(b, color){
+    const moves = [];
+    for(let r=0;r<SIZE;r++){
+      for(let c=0;c<SIZE;c++){
+        if(b[r][c] !== EMPTY) continue;
+        const f = flipsFor(b, r, c, color);
+        if(f.length) moves.push({ r, c, flips: f });
+      }
+    }
+    return moves;
+  }
+  function hasMove(b, color){
+    for(let r=0;r<SIZE;r++){
+      for(let c=0;c<SIZE;c++){
+        if(b[r][c] !== EMPTY) continue;
+        for(const [dr,dc] of DIRS){
+          let rr=r+dr, cc=c+dc, seen=false;
+          const opp = opponent(color);
+          while(inside(rr,cc) && b[rr][cc]===opp){ seen=true; rr+=dr; cc+=dc; }
+          if(seen && inside(rr,cc) && b[rr][cc]===color) return true;
+        }
+      }
+    }
+    return false;
+  }
+  function countDiscs(b){
+    let bl=0, wh=0;
+    for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++){
+      if(b[r][c]===BLACK) bl++; else if(b[r][c]===WHITE) wh++;
+    }
+    return { black: bl, white: wh, empty: SIZE*SIZE - bl - wh };
+  }
+  function cloneBoard(b){ return b.map(row=>row.slice()); }
+  function applyMove(b, move, color){
+    b[move.r][move.c] = color;
+    for(const [r,c] of move.flips) b[r][c] = color;
+  }
+
+  // ---- AI ----
+  function pickEasy(moves){
+    return moves[Math.floor(Math.random()*moves.length)];
+  }
+  function pickNormal(moves){
+    let best = moves[0], bestN = -1;
+    for(const m of moves){
+      if(m.flips.length > bestN){ bestN = m.flips.length; best = m; }
+    }
+    // tie-break randomly among equally-good
+    const ties = moves.filter(m=>m.flips.length===bestN);
+    return ties[Math.floor(Math.random()*ties.length)];
+  }
+
+  function evaluate(b, color){
+    // positional + disc-diff + mobility, from perspective of `color`
+    const opp = opponent(color);
+    let pos = 0, my = 0, op = 0;
+    for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++){
+      const v = b[r][c];
+      if(v === color){ pos += WEIGHTS[r][c]; my++; }
+      else if(v === opp){ pos -= WEIGHTS[r][c]; op++; }
+    }
+    const myMob = legalMoves(b, color).length;
+    const opMob = legalMoves(b, opp).length;
+    const mobility = (myMob - opMob) * 5;
+    const discDiff = (my - op);
+    return pos + mobility + discDiff;
+  }
+
+  // minimax with alpha-beta, depth in plies
+  function minimax(b, color, depth, alpha, beta, rootColor){
+    const moves = legalMoves(b, color);
+    if(depth === 0){
+      return { score: evaluate(b, rootColor) };
+    }
+    if(moves.length === 0){
+      // pass; if opponent also cannot move, game ends -> evaluate
+      if(!hasMove(b, opponent(color))){
+        return { score: evaluate(b, rootColor) };
+      }
+      return minimax(b, opponent(color), depth, alpha, beta, rootColor);
+    }
+    const maximizing = (color === rootColor);
+    let bestMove = null;
+    if(maximizing){
+      let best = -Infinity;
+      for(const m of moves){
+        const nb = cloneBoard(b);
+        applyMove(nb, m, color);
+        const res = minimax(nb, opponent(color), depth-1, alpha, beta, rootColor);
+        if(res.score > best){ best = res.score; bestMove = m; }
+        alpha = Math.max(alpha, best);
+        if(beta <= alpha) break;
+      }
+      return { score: best, move: bestMove };
+    }else{
+      let best = Infinity;
+      for(const m of moves){
+        const nb = cloneBoard(b);
+        applyMove(nb, m, color);
+        const res = minimax(nb, opponent(color), depth-1, alpha, beta, rootColor);
+        if(res.score < best){ best = res.score; bestMove = m; }
+        beta = Math.min(beta, best);
+        if(beta <= alpha) break;
+      }
+      return { score: best, move: bestMove };
+    }
+  }
+
+  function pickHard(b, moves){
+    // corner priority: take a corner immediately if available
+    const corners = moves.filter(m=>
+      (m.r===0||m.r===7) && (m.c===0||m.c===7));
+    if(corners.length){
+      return corners[Math.floor(Math.random()*corners.length)];
+    }
+    const empty = countDiscs(b).empty;
+    // deeper search in the endgame
+    let depth = 3;
+    if(empty <= 10) depth = 6;
+    else if(empty <= 14) depth = 4;
+    const res = minimax(cloneBoard(b), CPU, depth, -Infinity, Infinity, CPU);
+    if(res.move) return res.move;
+    return pickNormal(moves);
+  }
+
+  function chooseCpuMove(b, moves){
+    if(level === "easy") return pickEasy(moves);
+    if(level === "normal") return pickNormal(moves);
+    return pickHard(b, moves);
+  }
+
+  // ---- Rendering ----
+  function buildBoard(){
+    boardEl.innerHTML = "";
+    cells.length = 0;
+    for(let r=0;r<SIZE;r++){
+      const row = [];
+      for(let c=0;c<SIZE;c++){
+        const cell = document.createElement("div");
+        cell.className = "cell";
+        cell.dataset.r = r; cell.dataset.c = c;
+        cell.addEventListener("click", onCellClick);
+        boardEl.appendChild(cell);
+        row.push(cell);
+      }
+      cells.push(row);
+    }
+  }
+
+  function makeDisc(color){
+    const disc = document.createElement("div");
+    disc.className = "disc " + (color===BLACK ? "black" : "white");
+    const front = document.createElement("div");
+    front.className = "face front black";
+    const back = document.createElement("div");
+    back.className = "face back white";
+    disc.appendChild(front);
+    disc.appendChild(back);
+    return disc;
+  }
+
+  // full re-sync of board to DOM (used on init / restart)
+  function renderAll(){
+    for(let r=0;r<SIZE;r++){
+      for(let c=0;c<SIZE;c++){
+        const cell = cells[r][c];
+        cell.classList.remove("legal");
+        const existing = cell.querySelector(".disc");
+        const hint = cell.querySelector(".hint");
+        if(hint) hint.remove();
+        const v = board[r][c];
+        if(v === EMPTY){
+          if(existing) existing.remove();
+        }else{
+          if(existing){
+            existing.className = "disc " + (v===BLACK ? "black" : "white");
+          }else{
+            cell.appendChild(makeDisc(v));
+          }
+        }
+      }
+    }
+    updateScore();
+  }
+
+  function updateScore(){
+    const cnt = countDiscs(board);
+    numBlackEl.textContent = cnt.black;
+    numWhiteEl.textContent = cnt.white;
+  }
+
+  function clearHints(){
+    for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++){
+      const cell = cells[r][c];
+      cell.classList.remove("legal");
+      const h = cell.querySelector(".hint");
+      if(h) h.remove();
+    }
+  }
+
+  function showHints(moves){
+    clearHints();
+    for(const m of moves){
+      const cell = cells[m.r][m.c];
+      cell.classList.add("legal");
+      const h = document.createElement("div");
+      h.className = "hint";
+      cell.appendChild(h);
+    }
+  }
+
+  function setTurnIndicator(){
+    sideBlackEl.classList.toggle("active", current===BLACK && !gameOver);
+    sideWhiteEl.classList.toggle("active", current===WHITE && !gameOver);
+  }
+
+  function setTurnInfo(text, thinking){
+    if(!text){ turnInfoEl.textContent = ""; return; }
+    if(thinking){
+      turnInfoEl.innerHTML = '<span class="thinking">' + text + '</span>';
+    }else{
+      turnInfoEl.textContent = text;
+    }
+  }
+
+  function showPass(text){
+    passToast.textContent = text;
+    passToast.classList.add("show");
+    sndPass();
+    setTimeout(()=>passToast.classList.remove("show"), 1100);
+  }
+
+  // place a disc with animation and flip the captured discs
+  function placeAndFlip(move, color){
+    return new Promise(resolve=>{
+      const cell = cells[move.r][move.c];
+      // remove any hint there
+      const h = cell.querySelector(".hint");
+      if(h) h.remove();
+      const disc = makeDisc(color);
+      disc.classList.add("place");
+      disc.style.setProperty("--rot", color===BLACK ? "0deg" : "180deg");
+      cell.appendChild(disc);
+      sndPlace();
+
+      // flip captured discs with a slight stagger
+      move.flips.forEach((p, idx)=>{
+        const [fr, fc] = p;
+        setTimeout(()=>{
+          const fcell = cells[fr][fc];
+          const fdisc = fcell.querySelector(".disc");
+          if(fdisc){
+            fdisc.className = "disc " + (color===BLACK ? "black" : "white");
+          }
+          sndFlip(idx % 6);
+          updateScore();
+        }, 60 + idx*55);
+      });
+
+      const total = 60 + move.flips.length*55 + 280;
+      setTimeout(()=>{ updateScore(); resolve(); }, Math.max(360, total));
+    });
+  }
+
+  // ---- Flow ----
+  function startGame(chosen){
+    level = chosen;
+    board = newBoard();
+    current = BLACK;
+    gameOver = false;
+    busy = false;
+    renderAll();
+    startOverlay.classList.add("hidden");
+    endOverlay.classList.add("hidden");
+    setTurnIndicator();
+    nextTurn();
+  }
+
+  function restartSameLevel(){ startGame(level); }
+
+  async function nextTurn(){
+    if(gameOver) return;
+    setTurnIndicator();
+
+    const myMoves = legalMoves(board, current);
+    const oppMoves = legalMoves(board, opponent(current));
+    const full = countDiscs(board).empty === 0;
+
+    if(myMoves.length === 0){
+      if(oppMoves.length === 0 || full){
+        endGame();
+        return;
+      }
+      // pass
+      const who = current===HUMAN ? "あなたはパス" : "CPUはパス";
+      busy = true;
+      showPass(who);
+      clearHints();
+      setTimeout(()=>{
+        current = opponent(current);
+        busy = false;
+        nextTurn();
+      }, 1150);
+      return;
+    }
+
+    if(current === HUMAN){
+      busy = false;
+      setTurnInfo("あなたの番（黒）", false);
+      showHints(myMoves);
+    }else{
+      busy = true;
+      clearHints();
+      setTurnInfo("CPU 考え中", true);
+      const delay = 400 + Math.floor(Math.random()*200);
+      setTimeout(async ()=>{
+        const move = chooseCpuMove(board, myMoves);
+        applyMoveToState(move, CPU);
+        await placeAndFlip(move, CPU);
+        current = HUMAN;
+        busy = false;
+        setTurnInfo("", false);
+        nextTurn();
+      }, delay);
+    }
+  }
+
+  function applyMoveToState(move, color){
+    board[move.r][move.c] = color;
+    for(const [r,c] of move.flips) board[r][c] = color;
+  }
+
+  async function onCellClick(e){
+    if(busy || gameOver || current !== HUMAN) return;
+    const cell = e.currentTarget;
+    const r = parseInt(cell.dataset.r, 10);
+    const c = parseInt(cell.dataset.c, 10);
+    ensureAudio();
+    const flips = flipsFor(board, r, c, HUMAN);
+    if(flips.length === 0) return;
+    const move = { r, c, flips };
+    busy = true;
+    clearHints();
+    setTurnInfo("", false);
+    applyMoveToState(move, HUMAN);
+    await placeAndFlip(move, HUMAN);
+    current = CPU;
+    busy = false;
+    nextTurn();
+  }
+
+  function endGame(){
+    gameOver = true;
+    busy = false;
+    clearHints();
+    setTurnIndicator();
+    setTurnInfo("", false);
+    const cnt = countDiscs(board);
+    endBlack.textContent = cnt.black;
+    endWhite.textContent = cnt.white;
+
+    let won = false, draw = false;
+    if(cnt.black > cnt.white){ won = true; }
+    else if(cnt.black === cnt.white){ draw = true; }
+
+    const st = loadStat();
+    const newPlays = st.plays + 1;
+    const newWins = st.wins + (won ? 1 : 0);
+    saveStat(newWins, newPlays);
+
+    if(draw){
+      endTitle.textContent = "引き分け";
+      endBadge.textContent = "🤝";
+      sndDraw();
+    }else if(won){
+      endTitle.textContent = "あなたの勝ち！";
+      endBadge.textContent = "🏆";
+      sndWin();
+    }else{
+      endTitle.textContent = "CPUの勝ち…";
+      endBadge.textContent = "💧";
+      sndLose();
+    }
+    endStat.innerHTML = "累計勝利 <b>" + newWins + "</b> 勝 / " + newPlays + " 戦";
+    setTimeout(()=>endOverlay.classList.remove("hidden"), 650);
+  }
+
+  function refreshStartStat(){
+    const st = loadStat();
+    startStat.innerHTML = "累計 <b>" + st.wins + "</b> 勝 / " + st.plays + " 戦";
+  }
+
+  // ---- Mute ----
+  function applyMuteUI(){
+    muteBtn.textContent = muted ? "🔇" : "🔊";
+  }
+  function toggleMute(){
+    muted = !muted;
+    saveMute(muted);
+    applyMuteUI();
+    if(!muted){ ensureAudio(); beep(660, 0.08, "triangle", 0.12); }
+  }
+
+  // ---- Wire up ----
+  function init(){
+    muted = loadMute();
+    applyMuteUI();
+    buildBoard();
+    board = newBoard();
+    renderAll();
+    refreshStartStat();
+
+    document.querySelectorAll(".levels .btn").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        ensureAudio();
+        beep(520,0.08,"triangle",0.12);
+        startGame(btn.dataset.level);
+      });
+    });
+
+    document.getElementById("againBtn").addEventListener("click", ()=>{
+      ensureAudio();
+      restartSameLevel();
+    });
+    document.getElementById("changeBtn").addEventListener("click", ()=>{
+      ensureAudio();
+      endOverlay.classList.add("hidden");
+      refreshStartStat();
+      startOverlay.classList.remove("hidden");
+    });
+    document.getElementById("menuBtn").addEventListener("click", ()=>{
+      if(busy && !gameOver) return;
+      ensureAudio();
+      endOverlay.classList.add("hidden");
+      refreshStartStat();
+      startOverlay.classList.remove("hidden");
+    });
+    muteBtn.addEventListener("click", toggleMute);
+
+    // prevent double-tap zoom on the board area
+    let lastTouch = 0;
+    document.addEventListener("touchend", (e)=>{
+      const now = Date.now();
+      if(now - lastTouch < 300){ e.preventDefault(); }
+      lastTouch = now;
+    }, { passive:false });
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", init);
+  }else{
+    init();
+  }
+})();
+</script>
+
+<style>/* spark-cross-v3 */#sx-apps{position:fixed;left:max(8px,env(safe-area-inset-left));bottom:max(8px,env(safe-area-inset-bottom));z-index:9999;width:40px;height:40px;border-radius:50%;background:rgba(0,0,0,.7);color:#fff;border:2px solid rgba(255,255,255,.4);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;font-family:inherit;box-shadow:0 2px 8px rgba(0,0,0,.4)}#sx-apps:active{transform:scale(.92)}#sx-modal{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;padding:16px;font-family:system-ui,-apple-system,sans-serif}#sx-modal.open{display:flex}#sx-modal-inner{background:#1a1a2e;border:2px solid rgba(255,255,255,.2);border-radius:14px;max-width:420px;width:100%;max-height:80vh;overflow:hidden;display:flex;flex-direction:column;color:#fff}#sx-modal-head{padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-between;align-items:center}#sx-modal-head .ttl{font-size:14px;font-weight:bold}#sx-modal-close{background:transparent;border:0;color:#fff;font-size:22px;cursor:pointer;padding:0;line-height:1;width:32px;height:32px}#sx-list-host{flex:1;overflow-y:auto}#sx-modal-list{padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:6px}#sx-modal-list a{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 8px;color:#fff;text-decoration:none;border-radius:10px;background:rgba(255,255,255,.05);font-size:11px;text-align:center;line-height:1.3}#sx-modal-list a:active{background:rgba(255,255,255,.15);transform:scale(.97)}#sx-modal-list .e{font-size:28px;line-height:1}.sx-skel{padding:32px 16px;text-align:center;opacity:.6;font-size:12px}</style>
+<button id="sx-apps" aria-label="other apps">&#127918;</button>
+<script>(function(){var SU="https://qheeiwmzkhovlfdruomk.supabase.co",SK="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFoZWVpd216a2hvdmxmZHJ1b21rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2NzkyMTEsImV4cCI6MjA5MjI1NTIxMX0.eVKps24w6oydFOIQINhcuAXWlp29fXqylWOX8MxMRe0";var CK="sx_apps_cache_v1",TTL=5*60*1000;var b=document.getElementById("sx-apps");if(!b)return;var m=null,host=null,titleEl=null;function lc(){try{var c=JSON.parse(localStorage.getItem(CK)||"null");if(c&&Date.now()-c.t<TTL)return c.apps}catch(_){}return null}function sc(a){try{localStorage.setItem(CK,JSON.stringify({t:Date.now(),apps:a}))}catch(_){}}function fetchApps(){return fetch(SU+"/rest/v1/apps?select=slug,title,url,emoji&is_public=eq.true&order=created_at",{headers:{"apikey":SK,"Authorization":"Bearer "+SK}}).then(function(r){return r.json()}).then(function(a){if(Array.isArray(a))sc(a);return a})}function render(apps){if(!host)return;while(host.firstChild)host.removeChild(host.firstChild);var list=document.createElement("div");list.id="sx-modal-list";var here="reversi-jp";apps.filter(function(a){return a.slug!==here}).forEach(function(a){var lnk=document.createElement("a");lnk.href=a.url;lnk.target="_blank";lnk.rel="noopener noreferrer";var e=document.createElement("span");e.className="e";e.textContent=a.emoji||"🎮";var n=document.createElement("span");n.textContent=a.title;lnk.appendChild(e);lnk.appendChild(n);list.appendChild(lnk)});host.appendChild(list);if(titleEl)titleEl.textContent="もっと遊ぶ ✨ ("+apps.length+"本)"}function open(){if(!m){m=document.createElement("div");m.id="sx-modal";var inner=document.createElement("div");inner.id="sx-modal-inner";var head=document.createElement("div");head.id="sx-modal-head";titleEl=document.createElement("div");titleEl.className="ttl";titleEl.textContent="もっと遊ぶ ✨";var c=document.createElement("button");c.id="sx-modal-close";c.textContent="✕";c.setAttribute("aria-label","close");c.addEventListener("click",close);head.appendChild(titleEl);head.appendChild(c);host=document.createElement("div");host.id="sx-list-host";var sk=document.createElement("div");sk.className="sx-skel";sk.textContent="読み込み中…";host.appendChild(sk);inner.appendChild(head);inner.appendChild(host);m.appendChild(inner);m.addEventListener("click",function(e){if(e.target===m)close()});document.body.appendChild(m);var cached=lc();if(cached)render(cached);fetchApps().then(function(a){if(Array.isArray(a)&&a.length)render(a)}).catch(function(){if(!cached){while(host.firstChild)host.removeChild(host.firstChild);var er=document.createElement("div");er.className="sx-skel";er.textContent="読み込みに失敗しました";host.appendChild(er)}});}m.classList.add("open")}function close(){if(m)m.classList.remove("open")}b.addEventListener("click",open);})();</script>
+<style>/* spark-rules-v1 */#sx-help{position:fixed;right:max(8px,env(safe-area-inset-right));top:max(8px,env(safe-area-inset-top));z-index:9999;width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,.7);color:#fff;border:2px solid rgba(255,255,255,.4);font-size:18px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;font-family:inherit;box-shadow:0 2px 8px rgba(0,0,0,.4)}#sx-help:active{transform:scale(.92)}#sx-rules-modal{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;padding:16px;font-family:system-ui,-apple-system,sans-serif}#sx-rules-modal.open{display:flex}#sx-rules-inner{background:#1a1a2e;border:2px solid rgba(255,255,255,.2);border-radius:14px;max-width:420px;width:100%;max-height:85vh;overflow:hidden;display:flex;flex-direction:column;color:#fff}#sx-rules-head{padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}#sx-rules-head .ttl{font-size:14px;font-weight:bold}#sx-rules-close{background:transparent;border:0;color:#fff;font-size:22px;cursor:pointer;padding:0;line-height:1;width:32px;height:32px}#sx-rules-body{padding:18px;overflow-y:auto;flex:1;font-size:13px;line-height:1.7;white-space:pre-wrap;word-break:break-word}.sx-rules-skel{padding:32px 16px;text-align:center;opacity:.6;font-size:12px}</style>
+<button id="sx-help" aria-label="rules">?</button>
+<script>(function(){var SU="https://qheeiwmzkhovlfdruomk.supabase.co",SK="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFoZWVpd216a2hvdmxmZHJ1b21rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2NzkyMTEsImV4cCI6MjA5MjI1NTIxMX0.eVKps24w6oydFOIQINhcuAXWlp29fXqylWOX8MxMRe0";var CK="sx_rules_cache_v2",TTL=86400000;var b=document.getElementById("sx-help");if(!b)return;var m=null,body=null;function lc(s){try{var c=JSON.parse(localStorage.getItem(CK)||"{}");var e=c[s];if(e&&Date.now()-e.ts<TTL)return e.r}catch(_){}return null}function sc(s,r){try{var c=JSON.parse(localStorage.getItem(CK)||"{}");c[s]={r:r,ts:Date.now()};localStorage.setItem(CK,JSON.stringify(c))}catch(_){}}function getSlug(){return"reversi-jp"}function fetchRules(s){return fetch(SU+"/rest/v1/apps?select=rules&slug=eq."+encodeURIComponent(s),{headers:{"apikey":SK,"Authorization":"Bearer "+SK}}).then(function(r){return r.json()}).then(function(d){return d&&d[0]&&d[0].rules})}function open(){if(!m){m=document.createElement("div");m.id="sx-rules-modal";var inner=document.createElement("div");inner.id="sx-rules-inner";var head=document.createElement("div");head.id="sx-rules-head";var t=document.createElement("div");t.className="ttl";t.textContent="📖 ルール / 遊び方";var c=document.createElement("button");c.id="sx-rules-close";c.textContent="✕";c.addEventListener("click",close);head.appendChild(t);head.appendChild(c);body=document.createElement("div");body.id="sx-rules-body";var sk=document.createElement("div");sk.className="sx-rules-skel";sk.textContent="読み込み中…";body.appendChild(sk);inner.appendChild(head);inner.appendChild(body);m.appendChild(inner);m.addEventListener("click",function(e){if(e.target===m)close()});document.body.appendChild(m);var slug=getSlug();var cached=lc(slug);if(cached){body.textContent=cached}fetchRules(slug).then(function(r){if(r){sc(slug,r);body.textContent=r}else if(!cached){body.textContent="このアプリのルールはまだ用意されていません。"}}).catch(function(){if(!cached)body.textContent="読み込みに失敗しました"});}m.classList.add("open")}function close(){if(m)m.classList.remove("open")}b.addEventListener("click",open);})();</script>
+<script>/* spark-share-v1 */(function(){var SU=location.href,TT=document.title;function share(){if(navigator.share){navigator.share({title:TT,url:SU}).catch(function(){})}else{try{navigator.clipboard.writeText(SU);if(window.SX)SX.success("URLをコピーしました")}catch(_){}}}window.SX_SHARE=share;document.addEventListener("click",function(e){var t=e.target&&e.target.closest&&e.target.closest("[data-share],.sx-share,#btn-share");if(t){e.preventDefault();share()}})})();</script>
+</body>
+</html>
